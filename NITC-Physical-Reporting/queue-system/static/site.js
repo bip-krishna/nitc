@@ -522,7 +522,7 @@
     document.querySelectorAll("[data-action='logout']").forEach((button) => {
       button.addEventListener("click", () => {
         clearStudentSession();
-        window.location.href = "loginpage.html";
+        window.location.href = "/login";
       });
     });
   }

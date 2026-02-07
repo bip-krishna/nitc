@@ -68,6 +68,10 @@ def payment_label(raw_payment):
     return (raw_payment or "NA").replace("-", " ").title()
 
 
+def capacity_units_for_fee(fee_status):
+    return 1 if (fee_status or "").lower() == "yes" else 2
+
+
 def booking_to_view(booking):
     identity = parse_identity_from_email(booking.student_email)
     return {
@@ -270,7 +274,7 @@ def reject_booking():
 
     slot_obj = Slot.query.filter_by(time=booking.slot_time).first()
     if slot_obj:
-        slot_obj.capacity += 1
+        slot_obj.capacity += capacity_units_for_fee(booking.fee_status)
 
     for doc_name in [booking.class10_doc, booking.class12_doc, booking.category_doc, booking.paid_receipt_doc]:
         if not doc_name:
@@ -368,7 +372,8 @@ def submit_booking():
     slot_obj = Slot.query.filter_by(time=slot).first()
     if not slot_obj:
         return jsonify({"success": False, "message": "Invalid slot selected."})
-    if slot_obj.capacity <= 0:
+    needed_capacity = capacity_units_for_fee(fee)
+    if slot_obj.capacity < needed_capacity:
         return jsonify({"success": False, "message": "Selected slot is full. Please choose another slot."})
 
     token_id = generate_token_id()
@@ -389,7 +394,7 @@ def submit_booking():
         paid_receipt_doc=receipt_name,
         sent_to_chanakya=False
     )
-    slot_obj.capacity -= 1
+    slot_obj.capacity -= needed_capacity
     db.session.add(booking)
     db.session.commit()
 

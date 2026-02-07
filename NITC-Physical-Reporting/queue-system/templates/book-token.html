@@ -305,23 +305,40 @@
             return (hour - 12) + ":00 PM";
         }
 
-        function renderSlots() {
+        function requiredCapacityForFee(feeValue) {
+            return feeValue === "no" ? 2 : 1;
+        }
+
+        function renderSlots(feeValue = "") {
             const slotGrid = document.getElementById("slotGrid");
+            const neededCapacity = requiredCapacityForFee(feeValue);
             let html = "";
             for (let i = 0; i < slotMeta.length; i += 1) {
                 const slotText = slotMeta[i].time;
                 const seats = slotMeta[i].capacity;
-                const isFull = seats <= 0;
+                const isFull = seats < neededCapacity;
+                if (isFull && selectedSlot === slotText) {
+                    selectedSlot = "";
+                }
+                const statusText = isFull
+                    ? (feeValue === "no" ? `Need 2 tokens (only ${seats} left)` : "No seats left")
+                    : (seats + " seats left");
 
                 html += `
                     <button type="button" class="slot-card text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary transition ${isFull ? "opacity-60 cursor-not-allowed" : ""}" data-slot="${slotText}" ${isFull ? "disabled" : ""}>
                         <p class="font-bold">${slotText}</p>
-                        <p class="text-xs ${isFull ? "text-red-600" : (seats > 3 ? "text-emerald-600" : "text-amber-600")}">${isFull ? "No seats left" : (seats + " seats left")}</p>
+                        <p class="text-xs ${isFull ? "text-red-600" : (seats > 3 ? "text-emerald-600" : "text-amber-600")}">${statusText}</p>
                     </button>
                 `;
             }
 
             slotGrid.innerHTML = html;
+            if (selectedSlot) {
+                const selectedCard = slotGrid.querySelector(`[data-slot="${selectedSlot}"]`);
+                if (selectedCard) {
+                    selectedCard.classList.add("selected");
+                }
+            }
         }
 
         function updatePaymentModeVisibility(feeValue) {
@@ -368,9 +385,11 @@
             const paidReceiptDone = !!document.getElementById("paidReceiptUpload").files.length;
             const feeStepDone = feePaid ? paidReceiptDone : (feePicked && unpaidModeDone);
             const docsDone = !!document.getElementById("docClass10").files.length && !!document.getElementById("docClass12").files.length;
-            const slotDone = !!selectedSlot;
 
             updatePaymentModeVisibility(feeValue);
+            renderSlots(feeValue);
+            bindSlotSelection();
+            const slotDone = !!selectedSlot;
 
             let done = 0;
             if (feeStepDone) done += 1;
