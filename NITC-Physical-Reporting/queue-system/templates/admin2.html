@@ -210,10 +210,10 @@ Reject Profile
 Send to Late Reporting
 </button>
 </div>
-<button class="flex items-center gap-2 px-10 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-base transition-all shadow-lg shadow-emerald-500/20 transform hover:-translate-y-0.5">
+<a {% if ab %}href="{{ url_for('final_registration_print_page', booking_id=ab.id) }}" target="_blank" rel="noopener"{% endif %} class="flex items-center gap-2 px-10 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-base transition-all shadow-lg shadow-emerald-500/20 transform hover:-translate-y-0.5 {% if not ab %}opacity-50 pointer-events-none{% endif %}">
 <span class="material-symbols-outlined">how_to_reg</span>
 Complete Final Registration
-</button>
+</a>
 </div>
 </div>
 </section>

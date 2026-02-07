@@ -1,6 +1,7 @@
 import os
 import random
 import uuid
+from datetime import datetime
 from flask import Flask, request, jsonify, render_template, session, send_from_directory, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
@@ -199,6 +200,23 @@ def admin2_page():
                     active_booking = booking
                     break
     return render_template("admin2.html", chanakya_bookings=chanakya_bookings, active_booking=active_booking)
+
+
+@app.route("/final-registration-print/<int:booking_id>")
+def final_registration_print_page(booking_id):
+    if not session.get("admin_email"):
+        return abort(403)
+
+    booking = TokenBooking.query.get(booking_id)
+    if not booking:
+        return abort(404)
+
+    return render_template(
+        "final-registration-print.html",
+        booking=booking_to_view(booking),
+        generated_at=datetime.now().strftime("%d %b %Y, %I:%M %p"),
+        generated_by=session.get("admin_email") or "Admin",
+    )
 
 
 @app.route("/livestatus.html")
