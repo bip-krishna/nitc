@@ -2,7 +2,7 @@ import os
 import random
 import uuid
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template, session, send_from_directory, abort
+from flask import Flask, request, jsonify, render_template, session, send_from_directory, abort, url_for
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
@@ -48,6 +48,8 @@ class TokenBooking(db.Model):
     paid_receipt_doc = db.Column(db.String(255))
     sent_to_chanakya = db.Column(db.Boolean, default=False)
     admin1_notes = db.Column(db.Text)
+    final_registration_completed = db.Column(db.Boolean, default=False)
+    final_registration_completed_at = db.Column(db.String(50))
 
 
 def parse_identity_from_email(email):
@@ -92,6 +94,8 @@ def booking_to_view(booking):
         "category_doc_url": f"/uploads/{booking.category_doc}" if booking.category_doc else None,
         "paid_receipt_doc_url": f"/uploads/{booking.paid_receipt_doc}" if booking.paid_receipt_doc else None,
         "admin1_notes": booking.admin1_notes or "",
+        "final_registration_completed": bool(booking.final_registration_completed),
+        "final_registration_completed_at": booking.final_registration_completed_at or "",
     }
 
 
@@ -124,6 +128,8 @@ def ensure_tokenbooking_columns():
         "paid_receipt_doc": "TEXT",
         "sent_to_chanakya": "INTEGER DEFAULT 0",
         "admin1_notes": "TEXT",
+        "final_registration_completed": "INTEGER DEFAULT 0",
+        "final_registration_completed_at": "TEXT",
     }
     for column, ddl_type in required_columns.items():
         if column not in existing:
@@ -153,11 +159,15 @@ def student_page():
         current = TokenBooking.query.filter_by(student_email=email).order_by(TokenBooking.id.desc()).first()
         if current:
             existing_booking = booking_to_view(current)
+    final_admission_slip_url = None
+    if existing_booking and existing_booking["final_registration_completed"]:
+        final_admission_slip_url = url_for("final_registration_print_page", booking_id=existing_booking["id"])
     return render_template(
         "student.html",
         email=email,
         has_booking=existing_booking is not None,
-        existing_booking=existing_booking
+        existing_booking=existing_booking,
+        final_admission_slip_url=final_admission_slip_url,
     )
 
 @app.route("/admin.html")
@@ -204,19 +214,50 @@ def admin2_page():
 
 @app.route("/final-registration-print/<int:booking_id>")
 def final_registration_print_page(booking_id):
-    if not session.get("admin_email"):
-        return abort(403)
-
     booking = TokenBooking.query.get(booking_id)
     if not booking:
         return abort(404)
 
+    admin_email = session.get("admin_email")
+    student_email = session.get("student_email")
+    if not admin_email:
+        if not student_email or student_email != booking.student_email:
+            return abort(403)
+        if not booking.final_registration_completed:
+            return abort(403)
+
     return render_template(
         "final-registration-print.html",
         booking=booking_to_view(booking),
-        generated_at=datetime.now().strftime("%d %b %Y, %I:%M %p"),
-        generated_by=session.get("admin_email") or "Admin",
+        generated_at=booking.final_registration_completed_at or datetime.now().strftime("%d %b %Y, %I:%M %p"),
+        generated_by=admin_email or "Admissions Office",
     )
+
+
+@app.route("/complete-final-registration", methods=["POST"])
+def complete_final_registration():
+    if not session.get("admin_email"):
+        return jsonify({"success": False, "message": "Admin login required."}), 401
+
+    data = request.get_json(silent=True) or {}
+    booking_id = data.get("booking_id")
+    if not booking_id:
+        return jsonify({"success": False, "message": "booking_id is required."}), 400
+
+    booking = TokenBooking.query.get(booking_id)
+    if not booking:
+        return jsonify({"success": False, "message": "Booking not found."}), 404
+
+    booking.final_registration_completed = True
+    if not booking.final_registration_completed_at:
+        booking.final_registration_completed_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "message": "Final registration completed.",
+        "print_url": url_for("final_registration_print_page", booking_id=booking.id),
+    })
 
 
 @app.route("/livestatus.html")

@@ -210,10 +210,10 @@ Reject Profile
 Send to Late Reporting
 </button>
 </div>
-<a {% if ab %}href="{{ url_for('final_registration_print_page', booking_id=ab.id) }}" target="_blank" rel="noopener"{% endif %} class="flex items-center gap-2 px-10 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-base transition-all shadow-lg shadow-emerald-500/20 transform hover:-translate-y-0.5 {% if not ab %}opacity-50 pointer-events-none{% endif %}">
+<button id="complete-final-btn" data-booking-id="{{ ab.id if ab else '' }}" class="flex items-center gap-2 px-10 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-base transition-all shadow-lg shadow-emerald-500/20 transform hover:-translate-y-0.5 {% if not ab %}opacity-50 cursor-not-allowed{% endif %}" {% if not ab %}disabled{% endif %}>
 <span class="material-symbols-outlined">how_to_reg</span>
 Complete Final Registration
-</a>
+</button>
 </div>
 </div>
 </section>
@@ -253,27 +253,54 @@ Complete Final Registration
 <script>
   (function () {
     const rejectButton = document.getElementById("reject-profile-btn");
-    if (!rejectButton) return;
+    const completeButton = document.getElementById("complete-final-btn");
+    if (!rejectButton && !completeButton) return;
 
-    rejectButton.addEventListener("click", async () => {
-      const bookingId = rejectButton.dataset.bookingId;
-      if (!bookingId) {
-        alert("No active student selected.");
-        return;
-      }
-      const res = await fetch("/reject-booking", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: bookingId })
+    if (rejectButton) {
+      rejectButton.addEventListener("click", async () => {
+        const bookingId = rejectButton.dataset.bookingId;
+        if (!bookingId) {
+          alert("No active student selected.");
+          return;
+        }
+        const res = await fetch("/reject-booking", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking_id: bookingId })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.message || "Unable to reject profile.");
+          return;
+        }
+        alert("Profile rejected and removed.");
+        window.location.href = "/admin2.html";
       });
-      const data = await res.json();
-      if (!data.success) {
-        alert(data.message || "Unable to reject profile.");
-        return;
-      }
-      alert("Profile rejected and removed.");
-      window.location.href = "/admin2.html";
-    });
+    }
+
+    if (completeButton) {
+      completeButton.addEventListener("click", async () => {
+        const bookingId = completeButton.dataset.bookingId;
+        if (!bookingId) {
+          alert("No active student selected.");
+          return;
+        }
+        const res = await fetch("/complete-final-registration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking_id: bookingId })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.message || "Unable to complete final registration.");
+          return;
+        }
+        if (data.print_url) {
+          window.open(data.print_url, "_blank", "noopener");
+        }
+        alert("Final registration completed.");
+      });
+    }
   })();
 </script>
 </body></html>
