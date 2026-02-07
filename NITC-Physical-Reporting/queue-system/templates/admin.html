@@ -241,7 +241,7 @@
 </div>
 
 <div class="px-6 py-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 grid grid-cols-1 md:grid-cols-3 gap-3">
-<button class="bg-red-500 hover:bg-red-600 text-white font-black py-3 rounded-xl transition-colors">Reject Profile</button>
+<button id="reject-profile-btn" class="bg-red-500 hover:bg-red-600 text-white font-black py-3 rounded-xl transition-colors">Reject Profile</button>
 <button class="bg-amber-500 hover:bg-amber-600 text-white font-black py-3 rounded-xl transition-colors">Send to Late Reporting</button>
 <button id="proceed-chanakya-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-xl transition-colors">Proceed to Chanakya</button>
 </div>
@@ -275,7 +275,7 @@
 </div>
 <div class="flex gap-2">
 <button class="flex-1 bg-green-500 hover:bg-green-600 text-white text-[11px] font-black uppercase py-2 rounded-lg transition-colors">Complete Successfully</button>
-<button class="px-4 bg-slate-100 hover:bg-red-50 dark:bg-slate-800 dark:hover:bg-red-900/20 text-slate-600 hover:text-red-600 text-[11px] font-black uppercase py-2 rounded-lg transition-colors">Reject</button>
+<button data-booking-id="{{ booking.id }}" class="js-reject-booking px-4 bg-slate-100 hover:bg-red-50 dark:bg-slate-800 dark:hover:bg-red-900/20 text-slate-600 hover:text-red-600 text-[11px] font-black uppercase py-2 rounded-lg transition-colors">Reject</button>
 </div>
 </div>
 {% endfor %}
@@ -319,7 +319,7 @@ Detailed Consultation
 </div>
 <div class="flex gap-2">
 <button class="flex-1 bg-green-500 hover:bg-green-600 text-white text-[11px] font-black uppercase py-2 rounded-lg transition-colors">Complete Successfully</button>
-<button class="px-4 bg-slate-100 hover:bg-red-50 dark:bg-slate-800 dark:hover:bg-red-900/20 text-slate-600 hover:text-red-600 text-[11px] font-black uppercase py-2 rounded-lg transition-colors">Reject</button>
+<button data-booking-id="{{ booking.id }}" class="js-reject-booking px-4 bg-slate-100 hover:bg-red-50 dark:bg-slate-800 dark:hover:bg-red-900/20 text-slate-600 hover:text-red-600 text-[11px] font-black uppercase py-2 rounded-lg transition-colors">Reject</button>
 </div>
 </div>
 {% endfor %}
@@ -392,8 +392,25 @@ No students in detailed consultation queue.
       const detailRank = document.getElementById("detailRank");
       const detailQuota = document.getElementById("detailQuota");
       const proceedButton = document.getElementById("proceed-chanakya-btn");
+      const rejectProfileButton = document.getElementById("reject-profile-btn");
       const cards = document.querySelectorAll("[data-student-card='true']");
+      const rejectButtons = document.querySelectorAll(".js-reject-booking");
       let selectedBookingId = null;
+
+      async function rejectBooking(bookingId) {
+        const res = await fetch("/reject-booking", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking_id: bookingId })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.message || "Unable to reject profile.");
+          return;
+        }
+        alert("Profile rejected and removed.");
+        window.location.reload();
+      }
 
       cards.forEach((card) => {
         card.addEventListener("click", () => {
@@ -429,6 +446,25 @@ No students in detailed consultation queue.
           }
           alert("Student moved to Chanakya queue.");
           window.location.reload();
+        });
+      }
+
+      rejectButtons.forEach((button) => {
+        button.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const bookingId = button.dataset.bookingId;
+          if (!bookingId) return;
+          await rejectBooking(bookingId);
+        });
+      });
+
+      if (rejectProfileButton) {
+        rejectProfileButton.addEventListener("click", async () => {
+          if (!selectedBookingId) {
+            alert("Select a student first.");
+            return;
+          }
+          await rejectBooking(selectedBookingId);
         });
       }
     })();

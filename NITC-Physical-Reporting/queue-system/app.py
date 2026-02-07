@@ -136,7 +136,17 @@ def home():
 @app.route("/student.html")
 def student_page():
     email = session.get("student_email")
-    return render_template("student.html", email=email)
+    existing_booking = None
+    if email:
+        current = TokenBooking.query.filter_by(student_email=email).order_by(TokenBooking.id.desc()).first()
+        if current:
+            existing_booking = booking_to_view(current)
+    return render_template(
+        "student.html",
+        email=email,
+        has_booking=existing_booking is not None,
+        existing_booking=existing_booking
+    )
 
 @app.route("/admin.html")
 def admin_page():
@@ -178,6 +188,12 @@ def admin2_page():
                     active_booking = booking
                     break
     return render_template("admin2.html", chanakya_bookings=chanakya_bookings, active_booking=active_booking)
+
+
+@app.route("/livestatus.html")
+def livestatus_page():
+    email = session.get("student_email")
+    return render_template("livestatus.html", email=email)
 
 
 @app.route("/uploads/<path:filename>")
@@ -236,6 +252,36 @@ def proceed_to_chanakya():
     booking.admin1_notes = admin1_notes
     db.session.commit()
     return jsonify({"success": True, "message": "Student moved to Chanakya queue."})
+
+
+@app.route("/reject-booking", methods=["POST"])
+def reject_booking():
+    if not session.get("admin_email"):
+        return jsonify({"success": False, "message": "Admin login required."}), 401
+
+    data = request.get_json(silent=True) or {}
+    booking_id = data.get("booking_id")
+    if not booking_id:
+        return jsonify({"success": False, "message": "booking_id is required."}), 400
+
+    booking = TokenBooking.query.get(booking_id)
+    if not booking:
+        return jsonify({"success": False, "message": "Booking not found."}), 404
+
+    slot_obj = Slot.query.filter_by(time=booking.slot_time).first()
+    if slot_obj:
+        slot_obj.capacity += 1
+
+    for doc_name in [booking.class10_doc, booking.class12_doc, booking.category_doc, booking.paid_receipt_doc]:
+        if not doc_name:
+            continue
+        path = os.path.join(UPLOAD_DIR, doc_name)
+        if os.path.exists(path):
+            os.remove(path)
+
+    db.session.delete(booking)
+    db.session.commit()
+    return jsonify({"success": True, "message": "Profile rejected and booking removed."})
 
 
 

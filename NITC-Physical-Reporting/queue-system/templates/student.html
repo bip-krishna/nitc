@@ -284,7 +284,7 @@
                                     <span class="material-symbols-outlined">schedule</span>
                                     Wait for 5:00 PM
                                 </button>
-                                <p class="text-[11px] text-center text-slate-400">Booking will be active for exactly 4
+                                <p id="bookingHint" class="text-[11px] text-center text-slate-400">Booking will be active for exactly 4
                                     hours or until tokens last.</p>
                             </div>
                         </div>
@@ -311,9 +311,14 @@
                             class="size-16 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center mb-4">
                             <span class="material-symbols-outlined text-slate-300 text-3xl">confirmation_number</span>
                         </div>
+                        {% if has_booking %}
+                        <p class="text-sm font-bold text-emerald-600 uppercase tracking-widest">Active Token Booked</p>
+                        <p class="text-xs text-slate-500 mt-1 max-w-[220px]">Token {{ existing_booking.token_id }} at {{ existing_booking.slot_time }}. Track it via live status.</p>
+                        {% else %}
                         <p class="text-sm font-bold text-slate-400 uppercase tracking-widest">No Active Token</p>
                         <p class="text-xs text-slate-500 mt-1 max-w-[200px]">Once you book, your QR-enabled token will
                             appear here.</p>
+                        {% endif %}
                     </div>
                     <!-- Visual Guide Image -->
                     <div class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -368,6 +373,7 @@
     <script>
 
         const email = "{{ email }}";
+        const hasBooking = {{ has_booking|tojson }};
 
         if (email) {
 
@@ -403,9 +409,10 @@
             const minsEl = document.getElementById("mins");
             const secsEl = document.getElementById("secs");
             const btn = document.getElementById("bookBtn");
+            const bookingHint = document.getElementById("bookingHint");
 
             // 👉 Change for testing
-            const bookingHour = 23; // 5PM
+            const bookingHour = 0; // 5PM
             
 
             
@@ -430,11 +437,31 @@
                 localStorage.setItem("bookingOpen", "true");
             }
 
+            function enableLiveStatus() {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="material-symbols-outlined">monitoring</span> View Live Status';
+                btn.classList.remove(
+                    "cursor-not-allowed",
+                    "text-slate-500",
+                    "bg-slate-200",
+                    "dark:bg-slate-800"
+                );
+                btn.classList.add(
+                    "bg-emerald-600",
+                    "hover:bg-emerald-700",
+                    "text-white",
+                    "cursor-pointer"
+                );
+                if (bookingHint) {
+                    bookingHint.innerText = "You have already booked a token. Track your reporting queue in real time.";
+                }
+            }
+
             function updateTimer() {
 
                 const now = new Date();
                 const target = new Date();
-                target.setHours(bookingHour, 36, 0, 0);
+                target.setHours(bookingHour, 8, 0, 0);
 
                 const diff = target - now;
 
@@ -452,8 +479,9 @@
                 secsEl.innerText = String(s).padStart(2, '0');
             }
 
-            // Persist state
-            if (localStorage.getItem("bookingOpen") === "true") {
+            if (hasBooking) {
+                enableLiveStatus();
+            } else if (localStorage.getItem("bookingOpen") === "true") {
                 enableBooking();
             } else {
                 updateTimer();
@@ -462,7 +490,7 @@
 
             btn.onclick = () => {
                 if (!btn.disabled) {
-                    window.location.href = "/book-token.html";
+                    window.location.href = hasBooking ? "/livestatus.html" : "/book-token.html";
                 }
             }
 

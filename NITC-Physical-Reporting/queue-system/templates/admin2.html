@@ -201,7 +201,7 @@ Uploaded Documents
 
 <div class="bg-white dark:bg-slate-900 p-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
 <div class="flex gap-4">
-<button class="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-red-500/20">
+<button id="reject-profile-btn" data-booking-id="{{ ab.id if ab else '' }}" class="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-red-500/20">
 <span class="material-symbols-outlined text-[20px]">cancel</span>
 Reject Profile
 </button>
@@ -250,4 +250,30 @@ Complete Final Registration
   };
 </script>
 <script src="{{ url_for('static', filename='site.js') }}"></script>
+<script>
+  (function () {
+    const rejectButton = document.getElementById("reject-profile-btn");
+    if (!rejectButton) return;
+
+    rejectButton.addEventListener("click", async () => {
+      const bookingId = rejectButton.dataset.bookingId;
+      if (!bookingId) {
+        alert("No active student selected.");
+        return;
+      }
+      const res = await fetch("/reject-booking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.message || "Unable to reject profile.");
+        return;
+      }
+      alert("Profile rejected and removed.");
+      window.location.href = "/admin2.html";
+    });
+  })();
+</script>
 </body></html>
