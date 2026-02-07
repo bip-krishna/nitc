@@ -345,6 +345,7 @@
                     </div>
                     {% endif %}
                     <!-- Token Placeholder / Previous Tokens -->
+                    {% if not (existing_booking and existing_booking.final_registration_completed) %}
                     <div
                         class="bg-white dark:bg-slate-900/50 p-6 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-center">
                         <div
@@ -360,6 +361,7 @@
                             appear here.</p>
                         {% endif %}
                     </div>
+                    {% endif %}
                     <!-- Visual Guide Image -->
                     <div class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
                         <div class="relative h-40 w-full">
