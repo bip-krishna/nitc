@@ -520,9 +520,14 @@
 
   function bindLogout() {
     document.querySelectorAll("[data-action='logout']").forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         clearStudentSession();
-        window.location.href = "/login";
+        try {
+          await fetch("/logout", { method: "POST" });
+        } catch {
+          // Ignore network/logout API errors and still navigate to login screen.
+        }
+        window.location.href = "/";
       });
     });
   }

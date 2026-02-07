@@ -137,6 +137,13 @@ def ensure_tokenbooking_columns():
 def home():
     return render_template("login.html")
 
+@app.route("/logout", methods=["POST", "GET"])
+def logout():
+    session.clear()
+    if request.method == "GET":
+        return render_template("login.html")
+    return jsonify({"success": True})
+
 @app.route("/student.html")
 def student_page():
     email = session.get("student_email")
@@ -197,7 +204,40 @@ def admin2_page():
 @app.route("/livestatus.html")
 def livestatus_page():
     email = session.get("student_email")
-    return render_template("livestatus.html", email=email)
+    queue = TokenBooking.query.filter_by(sent_to_chanakya=False).order_by(TokenBooking.id.asc()).all()
+
+    now_serving = queue[0] if queue else None
+    upcoming_tokens = [b.token_id for b in queue[1:6] if b.token_id]
+    current_booking = None
+    for booking in queue:
+        if booking.student_email == email:
+            current_booking = booking
+            break
+
+    x_count = 0
+    y_count = 0
+    student_token = current_booking.token_id if current_booking else "--"
+
+    if current_booking:
+        ahead = [b for b in queue if b.id < current_booking.id]
+        x_count = sum(1 for b in ahead if (b.fee_status or "").lower() == "yes")
+        y_count = sum(1 for b in ahead if (b.fee_status or "").lower() != "yes")
+
+    students_ahead = x_count + y_count
+    expected_time_minutes = (3 * x_count) + (6 * y_count)
+
+    return render_template(
+        "livestatus.html",
+        email=email,
+        now_serving_token=now_serving.token_id if now_serving and now_serving.token_id else "--",
+        student_token=student_token,
+        upcoming_tokens=upcoming_tokens,
+        x_count=x_count,
+        y_count=y_count,
+        students_ahead=students_ahead,
+        expected_time_minutes=expected_time_minutes,
+        updated_label="Live",
+    )
 
 
 @app.route("/uploads/<path:filename>")

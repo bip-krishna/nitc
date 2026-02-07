@@ -412,7 +412,7 @@
             const bookingHint = document.getElementById("bookingHint");
 
             // 👉 Change for testing
-            const bookingHour = 0; // 5PM
+            const bookingHour = 2; // 5PM
             
 
             
@@ -461,7 +461,7 @@
 
                 const now = new Date();
                 const target = new Date();
-                target.setHours(bookingHour, 8, 0, 0);
+                target.setHours(bookingHour, 20, 0, 0);
 
                 const diff = target - now;
 
