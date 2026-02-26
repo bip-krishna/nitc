@@ -51,6 +51,9 @@ class TokenBooking(db.Model):
     final_registration_completed = db.Column(db.Boolean, default=False)
     final_registration_completed_at = db.Column(db.String(50))
     is_bhaskara_active = db.Column(db.Boolean, default=False)
+    moved_to_late_pool = db.Column(db.Boolean, default=False)
+    late_reporting_reason = db.Column(db.Text)
+    moved_to_late_pool_at = db.Column(db.String(50))
 
 
 def parse_identity_from_email(email):
@@ -107,6 +110,9 @@ def booking_to_view(booking):
         "admin1_notes": booking.admin1_notes or "",
         "final_registration_completed": bool(booking.final_registration_completed),
         "final_registration_completed_at": booking.final_registration_completed_at or "",
+        "moved_to_late_pool": bool(booking.moved_to_late_pool),
+        "late_reporting_reason": booking.late_reporting_reason or "",
+        "moved_to_late_pool_at": booking.moved_to_late_pool_at or "",
     }
 
 
@@ -142,6 +148,9 @@ def ensure_tokenbooking_columns():
         "final_registration_completed": "INTEGER DEFAULT 0",
         "final_registration_completed_at": "TEXT",
         "is_bhaskara_active": "INTEGER DEFAULT 0",
+        "moved_to_late_pool": "INTEGER DEFAULT 0",
+        "late_reporting_reason": "TEXT",
+        "moved_to_late_pool_at": "TEXT",
     }
     for column, ddl_type in required_columns.items():
         if column not in existing:
@@ -184,7 +193,7 @@ def student_page():
 
 @app.route("/admin.html")
 def admin_page():
-    bookings = TokenBooking.query.filter_by(sent_to_chanakya=False).order_by(TokenBooking.id.asc()).all()
+    bookings = TokenBooking.query.filter_by(sent_to_chanakya=False, moved_to_late_pool=False).order_by(TokenBooking.id.asc()).all()
     quick_bookings = [booking_to_view(b) for b in bookings if (b.fee_status or "").lower() == "yes"]
     detailed_bookings = [booking_to_view(b) for b in bookings if (b.fee_status or "").lower() == "no"]
     return render_template(
@@ -206,11 +215,16 @@ def book_token_page():
     return render_template("book-token.html", email=email, slots=slot_data, existing_booking=existing_booking)
 @app.route("/lateadmin.html")
 def lateadmin_page():
-    return render_template("lateadmin.html")
+    late_entries = TokenBooking.query.filter_by(moved_to_late_pool=True).order_by(TokenBooking.id.desc()).all()
+    return render_template("lateadmin.html", late_entries=[booking_to_view(b) for b in late_entries])
 
 @app.route("/admin2.html")
 def admin2_page():
-    chanakya_queue = TokenBooking.query.filter_by(sent_to_chanakya=True).order_by(TokenBooking.id.asc()).all()
+    chanakya_queue = TokenBooking.query.filter_by(
+        sent_to_chanakya=True,
+        final_registration_completed=False,
+        moved_to_late_pool=False
+    ).order_by(TokenBooking.id.asc()).all()
     chanakya_bookings = [booking_to_view(b) for b in chanakya_queue]
     selected_booking_id = request.args.get("booking", type=int)
     active_booking = None
@@ -259,10 +273,15 @@ def complete_final_registration():
     booking = TokenBooking.query.get(booking_id)
     if not booking:
         return jsonify({"success": False, "message": "Booking not found."}), 404
+    if booking.final_registration_completed:
+        return jsonify({"success": False, "message": "Final registration is already completed for this student."}), 400
+    if booking.moved_to_late_pool:
+        return jsonify({"success": False, "message": "This profile is in late reporting pool."}), 400
 
     booking.final_registration_completed = True
     if not booking.final_registration_completed_at:
         booking.final_registration_completed_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    booking.is_bhaskara_active = False
     db.session.commit()
 
     return jsonify({
@@ -388,12 +407,42 @@ def proceed_to_chanakya():
     booking = TokenBooking.query.get(booking_id)
     if not booking:
         return jsonify({"success": False, "message": "Booking not found."}), 404
+    if booking.moved_to_late_pool:
+        return jsonify({"success": False, "message": "Selected booking is already in late reporting pool."}), 400
 
     booking.sent_to_chanakya = True
     booking.is_bhaskara_active = False
     booking.admin1_notes = admin1_notes
     db.session.commit()
     return jsonify({"success": True, "message": "Student moved to Chanakya queue."})
+
+
+@app.route("/move-to-late-reporting", methods=["POST"])
+def move_to_late_reporting():
+    if not session.get("admin_email"):
+        return jsonify({"success": False, "message": "Admin login required."}), 401
+
+    data = request.get_json(silent=True) or {}
+    booking_id = data.get("booking_id")
+    reason = (data.get("reason") or "").strip()
+    if not booking_id:
+        return jsonify({"success": False, "message": "booking_id is required."}), 400
+    if not reason:
+        return jsonify({"success": False, "message": "Reason is required."}), 400
+
+    booking = TokenBooking.query.get(booking_id)
+    if not booking:
+        return jsonify({"success": False, "message": "Booking not found."}), 404
+    if booking.final_registration_completed:
+        return jsonify({"success": False, "message": "Cannot move a completed registration to late pool."}), 400
+
+    booking.moved_to_late_pool = True
+    booking.late_reporting_reason = reason
+    booking.moved_to_late_pool_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    booking.is_bhaskara_active = False
+    booking.sent_to_chanakya = True
+    db.session.commit()
+    return jsonify({"success": True, "message": "Student moved to late reporting pool."})
 
 
 @app.route("/set-bhaskara-active", methods=["POST"])
@@ -411,6 +460,8 @@ def set_bhaskara_active():
         return jsonify({"success": False, "message": "Booking not found."}), 404
     if booking.sent_to_chanakya:
         return jsonify({"success": False, "message": "Selected booking is already moved to Chanakya."}), 400
+    if booking.moved_to_late_pool:
+        return jsonify({"success": False, "message": "Selected booking is in late reporting pool."}), 400
 
     TokenBooking.query.update({"is_bhaskara_active": False})
     booking.is_bhaskara_active = True
