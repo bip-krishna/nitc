@@ -61,6 +61,15 @@ def parse_identity_from_email(email):
     return {"name": name, "roll_no": roll_part.upper()}
 
 
+def build_qr_payload(token_id, roll_no=None, slot_time=None):
+    parts = [f"TOKEN:{token_id or '--'}"]
+    if roll_no:
+        parts.append(f"ROLL:{roll_no}")
+    if slot_time:
+        parts.append(f"SLOT:{slot_time}")
+    return "NITC-PHYSICAL-REPORTING|" + "|".join(parts)
+
+
 def payment_label(raw_payment):
     if raw_payment == "already-paid":
         return "Already Paid"
@@ -89,6 +98,7 @@ def booking_to_view(booking):
         "payment_label": payment_label(booking.payment_mode),
         "queue_type": "X (Quick Review)" if (booking.fee_status or "").lower() == "yes" else "Y (Detailed Consultation)",
         "sent_to_chanakya": bool(booking.sent_to_chanakya),
+        "qr_payload": build_qr_payload(booking.token_id, identity["roll_no"], booking.slot_time),
         "class10_doc_url": f"/uploads/{booking.class10_doc}" if booking.class10_doc else None,
         "class12_doc_url": f"/uploads/{booking.class12_doc}" if booking.class12_doc else None,
         "category_doc_url": f"/uploads/{booking.category_doc}" if booking.category_doc else None,
@@ -328,6 +338,17 @@ def success_token():
 
     email = session.get("student_email")
     booking = session.get("booking")
+    if not booking and email:
+        latest = TokenBooking.query.filter_by(student_email=email).order_by(TokenBooking.id.desc()).first()
+        if latest:
+            identity = parse_identity_from_email(email)
+            booking = {
+                "slot": latest.slot_time,
+                "token": latest.token_id,
+                "fee": latest.fee_status,
+                "payment": latest.payment_mode,
+                "qr_payload": build_qr_payload(latest.token_id, identity["roll_no"], latest.slot_time),
+            }
 
     return render_template(
         "success-token.html",
@@ -502,7 +523,8 @@ def submit_booking():
         "slot": slot,
         "token": token_id,
         "fee": fee,
-        "payment": payment if fee == "no" else "already-paid"
+        "payment": payment if fee == "no" else "already-paid",
+        "qr_payload": build_qr_payload(token_id, parse_identity_from_email(email)["roll_no"], slot),
     }
 
     return jsonify({

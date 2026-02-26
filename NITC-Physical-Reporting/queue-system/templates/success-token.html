@@ -410,8 +410,8 @@
                         <div class="flex flex-col md:flex-row gap-10 items-center">
                             <div class="flex-shrink-0">
                                 <div class="bg-white p-4 rounded-xl border-2 border-slate-100 shadow-md">
-                                    <img alt="Token QR Code" class="size-48 lg:size-56"
-                                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxj04MBSw-FYCfF8k-LJSkBCc-hmIuzHTKqxHm41_eLN_e6DA32v-Jr3G3HuuquDeSKnM1zB3dkLTnQwgglGNCQ7yeeYJi9HEtRJzZJ8QHasPBtAG7rIZoCOBsBPvzCGyjWLhvULp8N3MFfuVCH4gzvhafklmbr-N1cVbEjrGj5EB0pz3GGGZVDrqJ7oJyz1O7S9Lv7UUOj54j2MiHnUSVfnkPwH1B4qoM-XrUnSp6mhK0LTeTulV23XveW-t9ZEiVA-HIA_wH9c36" />
+                                    <img id="tokenQrImage" alt="Token QR Code" class="size-48 lg:size-56"
+                                        src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={{ (booking.qr_payload or booking.token)|urlencode }}" />
                                 </div>
                                 <p
                                     class="text-center mt-4 font-mono text-xl font-bold tracking-widest text-slate-800 dark:text-slate-200">
@@ -617,10 +617,12 @@
             </div>
         </footer>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <!-- <script src="/static/site.js"></script> -->
     <script src="{{ url_for('static', filename='site.js') }}"></script>
     <script>
         const email = "{{ email }}";
+        const qrPayload = {{ (booking.qr_payload or booking.token)|default('', true)|tojson }};
 
         if (email) {
 
@@ -647,6 +649,14 @@
 
                 document.getElementById("studentBranch").innerText = branch;
             }
+        }
+
+        if (qrPayload && window.QRCode && document.getElementById("tokenQrImage")) {
+            QRCode.toDataURL(qrPayload, { width: 240, margin: 2 }, function (err, url) {
+                if (!err) {
+                    document.getElementById("tokenQrImage").src = url;
+                }
+            });
         }
 
     </script>
