@@ -205,15 +205,27 @@ Uploaded Documents
 <span class="material-symbols-outlined text-[20px]">cancel</span>
 Reject Profile
 </button>
-<button class="flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-amber-500/20">
+<button id="late-reporting-btn" data-booking-id="{{ ab.id if ab else '' }}" class="flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-amber-500/20 {% if not ab %}opacity-50 cursor-not-allowed{% endif %}" {% if not ab %}disabled{% endif %}>
 <span class="material-symbols-outlined text-[20px]">watch_later</span>
 Send to Late Reporting
 </button>
 </div>
+{% if ab and not ab.final_registration_completed %}
 <button id="complete-final-btn" data-booking-id="{{ ab.id if ab else '' }}" class="flex items-center gap-2 px-10 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-base transition-all shadow-lg shadow-emerald-500/20 transform hover:-translate-y-0.5 {% if not ab %}opacity-50 cursor-not-allowed{% endif %}" {% if not ab %}disabled{% endif %}>
 <span class="material-symbols-outlined">how_to_reg</span>
 Complete Final Registration
 </button>
+{% elif ab and ab.final_registration_completed %}
+<div class="flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm font-semibold">
+<span class="material-symbols-outlined text-[20px]">task_alt</span>
+Registration Completed
+</div>
+{% else %}
+<div class="flex items-center gap-2 px-4 py-3 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 text-sm font-semibold">
+<span class="material-symbols-outlined text-[20px]">info</span>
+No active student selected
+</div>
+{% endif %}
 </div>
 </div>
 </section>
@@ -253,8 +265,9 @@ Complete Final Registration
 <script>
   (function () {
     const rejectButton = document.getElementById("reject-profile-btn");
+    const lateReportingButton = document.getElementById("late-reporting-btn");
     const completeButton = document.getElementById("complete-final-btn");
-    if (!rejectButton && !completeButton) return;
+    if (!rejectButton && !lateReportingButton && !completeButton) return;
 
     if (rejectButton) {
       rejectButton.addEventListener("click", async () => {
@@ -274,6 +287,39 @@ Complete Final Registration
           return;
         }
         alert("Profile rejected and removed.");
+        window.location.href = "/admin2.html";
+      });
+    }
+
+    if (lateReportingButton) {
+      lateReportingButton.addEventListener("click", async () => {
+        const bookingId = lateReportingButton.dataset.bookingId;
+        if (!bookingId) {
+          alert("No active student selected.");
+          return;
+        }
+
+        const reason = window.prompt("Enter reason for moving this student to Late Reporting Pool:");
+        if (reason === null) {
+          return;
+        }
+        const trimmedReason = reason.trim();
+        if (!trimmedReason) {
+          alert("Reason is required.");
+          return;
+        }
+
+        const res = await fetch("/move-to-late-reporting", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking_id: bookingId, reason: trimmedReason })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.message || "Unable to move to late reporting pool.");
+          return;
+        }
+        alert("Student moved to late reporting pool.");
         window.location.href = "/admin2.html";
       });
     }
@@ -299,6 +345,7 @@ Complete Final Registration
           window.open(data.print_url, "_blank", "noopener");
         }
         alert("Final registration completed.");
+        window.location.href = "/admin2.html";
       });
     }
   })();
