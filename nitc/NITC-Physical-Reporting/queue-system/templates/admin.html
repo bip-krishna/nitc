@@ -397,6 +397,20 @@ No students in detailed consultation queue.
       const rejectButtons = document.querySelectorAll(".js-reject-booking");
       let selectedBookingId = null;
 
+      async function setBhaskaraActive(bookingId) {
+        const res = await fetch("/set-bhaskara-active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking_id: bookingId })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.message || "Unable to set now serving token.");
+          return false;
+        }
+        return true;
+      }
+
       async function rejectBooking(bookingId) {
         const res = await fetch("/reject-booking", {
           method: "POST",
@@ -412,17 +426,31 @@ No students in detailed consultation queue.
         window.location.reload();
       }
 
-      cards.forEach((card) => {
-        card.addEventListener("click", () => {
+      function selectCard(card, shouldScroll = true) {
+        if (!card) return;
           detailName.textContent = card.dataset.name || "Selected Student";
           detailId.textContent = `Roll No: ${card.dataset.id || "--"}`;
           detailProgram.textContent = card.dataset.program || "--";
           detailRank.textContent = card.dataset.rank || "--";
           detailQuota.textContent = card.dataset.quota || "--";
           selectedBookingId = card.dataset.bookingId || null;
-          document.getElementById("student-detail-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+          if (selectedBookingId) {
+            setBhaskaraActive(selectedBookingId);
+          }
+          if (shouldScroll) {
+            document.getElementById("student-detail-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+      }
+
+      cards.forEach((card) => {
+        card.addEventListener("click", () => {
+          selectCard(card, true);
         });
       });
+
+      if (cards.length > 0) {
+        selectCard(cards[0], false);
+      }
 
       if (proceedButton) {
         proceedButton.addEventListener("click", async () => {

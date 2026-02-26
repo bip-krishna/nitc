@@ -50,6 +50,7 @@ class TokenBooking(db.Model):
     admin1_notes = db.Column(db.Text)
     final_registration_completed = db.Column(db.Boolean, default=False)
     final_registration_completed_at = db.Column(db.String(50))
+    is_bhaskara_active = db.Column(db.Boolean, default=False)
 
 
 def parse_identity_from_email(email):
@@ -140,6 +141,7 @@ def ensure_tokenbooking_columns():
         "admin1_notes": "TEXT",
         "final_registration_completed": "INTEGER DEFAULT 0",
         "final_registration_completed_at": "TEXT",
+        "is_bhaskara_active": "INTEGER DEFAULT 0",
     }
     for column, ddl_type in required_columns.items():
         if column not in existing:
@@ -182,7 +184,7 @@ def student_page():
 
 @app.route("/admin.html")
 def admin_page():
-    bookings = TokenBooking.query.order_by(TokenBooking.id.desc()).all()
+    bookings = TokenBooking.query.filter_by(sent_to_chanakya=False).order_by(TokenBooking.id.asc()).all()
     quick_bookings = [booking_to_view(b) for b in bookings if (b.fee_status or "").lower() == "yes"]
     detailed_bookings = [booking_to_view(b) for b in bookings if (b.fee_status or "").lower() == "no"]
     return render_template(
@@ -273,21 +275,36 @@ def complete_final_registration():
 @app.route("/livestatus.html")
 def livestatus_page():
     email = session.get("student_email")
-    queue = TokenBooking.query.filter_by(sent_to_chanakya=False).order_by(TokenBooking.id.asc()).all()
-
-    now_serving = queue[0] if queue else None
-    upcoming_tokens = [b.token_id for b in queue[1:6] if b.token_id]
     current_booking = None
-    for booking in queue:
-        if booking.student_email == email:
-            current_booking = booking
-            break
+    if email:
+        current_booking = TokenBooking.query.filter_by(student_email=email).order_by(TokenBooking.id.desc()).first()
+
+    queue = []
+    if current_booking:
+        queue = TokenBooking.query.filter_by(
+            sent_to_chanakya=False,
+            slot_time=current_booking.slot_time
+        ).order_by(TokenBooking.id.asc()).all()
+
+    now_serving = next((b for b in queue if b.is_bhaskara_active), None)
+    if not now_serving and queue:
+        now_serving = queue[0]
+
+    upcoming_tokens = []
+    if queue:
+        now_index = 0
+        if now_serving:
+            for idx, booking in enumerate(queue):
+                if booking.id == now_serving.id:
+                    now_index = idx
+                    break
+        upcoming_tokens = [b.token_id for b in queue[now_index + 1: now_index + 6] if b.token_id]
 
     x_count = 0
     y_count = 0
     student_token = current_booking.token_id if current_booking else "--"
 
-    if current_booking:
+    if current_booking and queue:
         ahead = [b for b in queue if b.id < current_booking.id]
         x_count = sum(1 for b in ahead if (b.fee_status or "").lower() == "yes")
         y_count = sum(1 for b in ahead if (b.fee_status or "").lower() != "yes")
@@ -373,9 +390,37 @@ def proceed_to_chanakya():
         return jsonify({"success": False, "message": "Booking not found."}), 404
 
     booking.sent_to_chanakya = True
+    booking.is_bhaskara_active = False
     booking.admin1_notes = admin1_notes
     db.session.commit()
     return jsonify({"success": True, "message": "Student moved to Chanakya queue."})
+
+
+@app.route("/set-bhaskara-active", methods=["POST"])
+def set_bhaskara_active():
+    if not session.get("admin_email"):
+        return jsonify({"success": False, "message": "Admin login required."}), 401
+
+    data = request.get_json(silent=True) or {}
+    booking_id = data.get("booking_id")
+    if not booking_id:
+        return jsonify({"success": False, "message": "booking_id is required."}), 400
+
+    booking = TokenBooking.query.get(booking_id)
+    if not booking:
+        return jsonify({"success": False, "message": "Booking not found."}), 404
+    if booking.sent_to_chanakya:
+        return jsonify({"success": False, "message": "Selected booking is already moved to Chanakya."}), 400
+
+    TokenBooking.query.update({"is_bhaskara_active": False})
+    booking.is_bhaskara_active = True
+    db.session.commit()
+    return jsonify({
+        "success": True,
+        "message": "Now serving token updated.",
+        "token_id": booking.token_id,
+        "slot_time": booking.slot_time
+    })
 
 
 @app.route("/reject-booking", methods=["POST"])
@@ -391,6 +436,8 @@ def reject_booking():
     booking = TokenBooking.query.get(booking_id)
     if not booking:
         return jsonify({"success": False, "message": "Booking not found."}), 404
+
+    booking.is_bhaskara_active = False
 
     slot_obj = Slot.query.filter_by(time=booking.slot_time).first()
     if slot_obj:
